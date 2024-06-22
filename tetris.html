@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <title>Tetris</title>
+</head>
+<body>
+  <p1>TETRIS</p1>
+  <div class="tetris-container">
+    <canvas id="tetrisCanvas" width="300" height="650"></canvas>
+    <div class="controls-container">
+      <button class="control-button" onclick="move('left')">left</i></button>
+      <button class="control-button" onclick="move('rotate')">rotate</i></button>
+      <button class="control-button" onclick="move('right')"><i class="fa-regular fa-right-long"></i></button>
+      <button class="control-button" onclick="move('down')"><i class="fas fa-chevron-down"></i></button>
+      <button class="control-button" onclick="hardDrop()"><i class="fas fa-arrow-down"></i></button>
+      <button class="control-button" onclick="playPause()"><i class="fas fa-play"></i></button>
+      <button class="control-button" onclick="restartGame()"><i class="fas fa-redo"></i></button>
+      <div id="game-over" style="display: none;">
+        <p>Game Over!</p>
+        <p>Score: <span id="score-display">0</span></p>
+        <button class="control-button" onclick="restartGame()">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let gameInterval;
+    let isGamePaused = false;
+    let score = 0;
+
+    const canvas = document.getElementById('tetrisCanvas');
+    const context = canvas.getContext('2d');
+
+    const blockSize = 30;
+    const rows = 22;
+    const cols = 10;
+
+    const colors = ['#00FFFF', '#FFFF00', '#800080', '#00FF00', '#FF0000', '#0000FF', '#FFA500'];
+    const tetriminoes = [
+      [[1, 1, 1, 1]], // I
+      [[1, 1, 1], [1]], // J
+      [[1, 1, 1], [0, 0, 1]], // L
+      [[1, 1], [1, 1]], // O
+      [[1, 1, 1], [0, 1]], // T
+      [[1, 1, 0], [0, 1, 1]], // S
+      [[0, 1, 1], [1, 1]], // Z
+    ];
+
+    let board = Array.from({ length: rows }, () => Array(cols).fill(0));
+    let currentRow, currentCol, currentColor, tetrimino;
+
+    function drawBlock(row, col, color) {
+      context.fillStyle = color;
+      context.fillRect(col * blockSize, row * blockSize, blockSize, blockSize);
+      context.strokeRect(col * blockSize, row * blockSize, blockSize, blockSize);
+    }
+
+    function drawBoard() {
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          if (board[row][col] !== 0) {
+            drawBlock(row, col, colors[board[row][col] - 1]);
+          }
+        }
+      }
+    }
+
+    function drawTetrimino() {
+      tetrimino.forEach((r, i) => {
+        r.forEach((block, j) => {
+          if (block === 1) {
+            drawBlock(currentRow + i, currentCol + j, colors[currentColor]);
+          }
+        });
+      });
+    }
+
+    function draw() {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      drawBoard();
+      drawTetrimino();
+    }
+
+    function collision() {
+      for (let i = 0; i < tetrimino.length; i++) {
+        for (let j = 0; j < tetrimino[i].length; j++) {
+          if (
+            tetrimino[i][j] === 1 &&
+            (board[currentRow + i] && board[currentRow + i][currentCol + j]) !== 0
+          ) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function rotate() {
+      const temp = tetrimino;
+      tetrimino = tetrimino[0].map((_, i) => tetrimino.map(row => row[i])).reverse();
+      if (collision()) {
+        tetrimino = temp;
+      }
+    }
+
+    function moveLeft() {
+      currentCol--;
+      if (collision()) {
+        currentCol++;
+      }
+    }
+
+    function moveRight() {
+      currentCol++;
+      if (collision()) {
+        currentCol--;
+      }
+    }
+
+    function moveDown() {
+      currentRow++;
+      if (collision()) {
+        currentRow--;
+        placeTetrimino();
+        spawnTetrimino();
+      }
+    }
+
+    function placeTetrimino() {
+      tetrimino.forEach((r, i) => {
+        r.forEach((block, j) => {
+          if (block === 1) {
+            board[currentRow + i][currentCol + j] = currentColor + 1;
+          }
+        });
+      });
+
+      // Check for completed rows and update score
+      for (let i = rows - 1; i >= 0; i--) {
+        if (board[i].every(block => block !== 0)) {
+          score += 10;
+          updateScore();
+          // Remove the completed row and shift above rows down
+          board.splice(i, 1);
+          board.unshift(Array(cols).fill(0));
+        }
+      }
+
+      // Check for game over
+      if (collision() && currentRow === 0) {
+        endGame();
+      }
+    }
+
+    function updateScore() {
+      document.getElementById('score-display').textContent = score;
+    }
+
+    function spawnTetrimino() {
+      currentRow = 0;
+      currentCol = Math.floor(cols / 2) - 1;
+      currentColor = Math.floor(Math.random() * colors.length);
+      tetrimino = tetriminoes[Math.floor(Math.random() * tetriminoes.length)];
+      if (collision()) {
+        resetGame();
+      }
+    }
+
+    function resetGame() {
+      board = Array.from({ length: rows }, () => Array(cols).fill(0));
+      score = 0;
+      updateScore();
+    }
+
+    function move(direction) {
+      switch (direction) {
+        case 'left':
+          moveLeft();
+          break;
+        case 'rotate':
+          rotate();
+          break;
+        case 'right':
+          moveRight();
+          break;
+        case 'down':
+          moveDown();
+          break;
+      }
+      draw();
+    }
+
+    document.addEventListener('keydown', (event) => {
+      switch (event.key) {
+        case 'ArrowUp':
+          rotate();
+          break;
+        case 'ArrowDown':
+          moveDown();
+          break;
+        case 'ArrowLeft':
+          moveLeft();
+          break;
+        case 'ArrowRight':
+          moveRight();
+          break;
+      }
+      draw();
+    });
+
+    function gameTick() {
+      moveDown();
+      draw();
+    }
+
+    function gameLoop() {
+      gameInterval = setInterval(gameTick, 1000);
+    }
+
+    function playPause() {
+      if (isGamePaused) {
+        gameLoop(); // Resume game loop
+      } else {
+        clearInterval(gameInterval); // Pause game loop
+      }
+      isGamePaused = !isGamePaused;
+    }
+
+    function hardDrop() {
+      while (!collision()) {
+        moveDown();
+      }
+      moveDown(); // Move down once to place the tetrimino
+    }
+
+    function endGame() {
+      clearInterval(gameInterval);
+      document.getElementById('game-over').style.display = 'block';
+    }
+
+    function restartGame() {
+      document.getElementById('game-over').style.display = 'none';
+      isGamePaused = false;
+      resetGame();
+      spawnTetrimino();
+      draw();
+      gameLoop();
+    }
+
+    function drawTetrisText() {
+      context.fillStyle = '#00';
+      context.font = 'bold 30px Arial';
+      context.fillText('TETRIS', canvas.width / 2 - 60, canvas.height / 2);
+    }
+
+    function draw() {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      drawTetrisText();
+      drawBoard();
+      drawTetrimino();
+    }
+
+    spawnTetrimino();
+    gameLoop();
+  </script>
+
+  <style>
+
+        
+    .tetris-container {
+      display: flex;
+      
+    }
+
+    .controls-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      margin-left: 300px;
+    }
+
+    canvas {
+      border: 2px solid black;
+    }
+
+    .control-button {
+      background-color: silver ;
+      border: none;
+      color: white;
+      padding: 15px 32px;
+      text-align:center ;
+      text-decoration: none;
+      
+      font-size: 17px;
+      margin: 3px 2px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    #game-over {
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</body>
+</html>
